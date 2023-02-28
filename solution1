@@ -1,0 +1,75 @@
+#solution1:
+import pandas as pd
+import numpy as np
+
+#load file
+sales = pd.read_csv('sales.csv')
+prices = pd.read_csv('prices.csv')
+
+#convert ordered_at, updated_at to datetime object (using pd.to_datetime)
+sales['ordered_at'] = pd.to_datetime(sales['ordered_at'])
+prices['updated_at'] = pd.to_datetime(prices['updated_at'])
+
+sales = sales.sort_values(by='ordered_at')
+print(sales)
+
+prices = prices.sort_values(by='updated_at')
+print(prices)
+
+# find the "nearest" update timestamp of each order
+merge_nearest = pd.merge_asof(sales, prices, left_on='ordered_at', right_on='updated_at', by='product_id', direction='nearest')
+
+# compare ordered_at and "nearest" updated_at of each order to find the correct price
+
+merge_nearest['listed_price'] = np.where(merge_nearest['ordered_at'] >= merge_nearest['updated_at'],
+                                         merge_nearest['new_price'], merge_nearest['old_price'])
+print(merge_nearest.head(10))
+
+# calculate total revenue for each product
+
+merge_nearest['revenue'] = merge_nearest['quantity_ordered'] * merge_nearest['listed_price']
+total_revenue_by_product_and_price = merge_nearest.groupby(['product_id', 'listed_price'], as_index=False)['revenue'].sum()
+print(total_revenue_by_product_and_price)
+
+total_revenue = merge_nearest.groupby('product_id')['revenue'].sum()
+print(total_revenue)
+
+# Alternative to np.where: create a function with if-else condition
+
+def price(row):
+    if row['ordered_at'] >= row['updated_at']:
+        return row['new_price']
+    else:
+        return row['old_price']
+
+merge_nearest['price'] = merge_nearest.apply(price, axis=1)
+print(merge_nearest)
+
+merge_nearest['revenue1'] = merge_nearest['quantity_ordered'] * merge_nearest['price']
+total_revenue1_by_product = merge_nearest.groupby(['product_id'], as_index=False)['revenue1'].sum()
+print(total_revenue1_by_product)
+
+# merge sales and prices table with direction='backward' (default value, which can be optionally omitted)
+
+merge_backward = pd.merge_asof(sales, prices, by='product_id', left_on='ordered_at', right_on='updated_at', direction='backward')
+merge_backward = merge_backward[['product_id', 'ordered_at', 'quantity_ordered', 'new_price']].rename(columns={'new_price':'price'})
+print(merge_backward.head(10))
+
+
+# merge merge_backward and prices tables with direction='forward'
+
+merge_forward = pd.merge_asof(merge_backward, prices, by='product_id', left_on='ordered_at', right_on='updated_at', direction='forward')
+print(merge_forward.head())
+
+# fill null values in 'price' column by 'old_price' column where necessary
+
+merge_forward['price'] = merge_forward['price'].fillna(merge_forward['old_price'])
+final_data = merge_forward[['product_id', 'ordered_at', 'quantity_ordered', 'price']]
+print(final_data)
+
+final_data['revenue'] = final_data['quantity_ordered'] * final_data['price']
+revenue_by_product_and_price = final_data.groupby(['product_id', 'price'], as_index=False)['revenue'].sum()
+print(revenue_by_product_and_price)
+
+total_revenue = final_data.groupby('product_id', as_index=False)['revenue'].sum()
+print(total_revenue)
