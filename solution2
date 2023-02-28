@@ -1,0 +1,31 @@
+#def function that return the closest date that price update
+def closest_update_date (id, order_date):
+    new_date = prices['updated_at'][prices['product_id'] == id]
+    if order_date < new_date.min():
+       closest_date = new_date.min()
+    else :
+       closest_date = new_date[order_date > new_date].max()                            
+    return closest_date
+  
+#def function that return closest price base on productid and order_date
+def return_closest_price(id, order_date):
+    day = closest_update_date (id, order_date)
+    if order_date < day :
+       closest_price = prices['old_price'][(prices['updated_at'] == day) & (prices['product_id'] == id)].values[0]
+    else :
+       closest_price = prices['new_price'][(prices['updated_at'] == day) & (prices['product_id'] == id)].values[0]                              
+    return closest_price
+    
+ #Find price corresponding each row and append to update_price array.
+update_price=[]
+for i in np.arange(len(sales)):
+    updated_price = return_closest_price(sales.iloc[i]['product_id'], sales.iloc[i]['ordered_at'])
+    update_price.append(updated_price)
+
+#create and calculate price and revenue column
+sales["price"] = update_price
+sales["revenue"] = sales['price'] * sales['quantity_ordered']
+
+#export to csv file
+sales
+# sale.to_csv("revenue.csv")   
